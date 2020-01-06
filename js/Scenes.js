@@ -14,7 +14,6 @@ class BaseScene extends Phaser.Scene {
 
     create() {
         //Create tilemap and attach tilesets
-
         this.map.landscape = this.map.addTilesetImage('landscape-tileset', 'landscape-image');
         this.map.props = this.map.addTilesetImage('props-tileset', 'props-image');
 
@@ -32,25 +31,23 @@ class BaseScene extends Phaser.Scene {
         this.skulls = this.physics.add.group();
 
         //Create from object layer(s)
-        this.map.getObjectLayer("objects").objects.forEach(function(object){
-            object = this.retrieveCustomProperties(object);
-
-            if(object.type === "playerSpawner"){
-                //Create player
-                this.createPlayer(object.x, object.y);
-            }
-
-            if(object.type === "pickup"){
-                //Create gem
-                this.createGem(object);
-            }
-
-            if(object.type === "enemySpawner"){
-                //Create enemy
-                this.createEnemy(object);
-            }
-        }, this);
-
+        let objectLayer = this.map.getObjectLayer("objects")
+        if(objectLayer){
+            objectLayer.objects.forEach(function(object){            
+                object = this.retrieveCustomProperties(object); //Check if the object has any custom properties in Tiled and assign them to the object
+    
+                if(object.type === "playerSpawner"){
+                    //Create player
+                    this.createPlayer(object);
+                } else if(object.type === "pickup"){
+                    //Create gem
+                    this.createGem(object);
+                } else if(object.type === "enemySpawner"){
+                    //Create enemy
+                    this.createSkull(object);
+                }
+            }, this); //Set context for object layer
+        }
 
         //Create foreground layers
         this.map.createStaticLayer('foreground', [this.map.landscape, this.map.props], 0, 0);
@@ -84,13 +81,11 @@ class BaseScene extends Phaser.Scene {
         if (Phaser.Input.Keyboard.JustDown(this.cursors.space)) {
             this.player.setVelocityY(-200);
         }
-
-
     }
 
-    createPlayer(x, y) {
+    createPlayer(object) {
         //Add sprite to world
-        this.player = this.physics.add.sprite(x, y, 'player', 1);
+        this.player = this.physics.add.sprite(object.x, object.y, 'player', 1);
         this.player.setCollideWorldBounds(true);
     }
 
@@ -99,11 +94,9 @@ class BaseScene extends Phaser.Scene {
         this.gems.create(object.x, object.y, object.sprite);
     }
 
-    createEnemy(object) {
-        //Add sprite
-        //let skull = this.skulls.create(object.x, object.y);
-        let origin = {x: object.x, y: object.y+object.height};
-        let dest = {x: object.x+object.width, y: object.y+object.height};
+    createSkull(object) {
+        let origin = {x: object.x, y: object.y + object.height};
+        let dest = {x: object.x + object.width, y: object.y + object.height};
         let line = new Phaser.Curves.Line(origin, dest);
         let skull = this.add.follower(line, origin.x, origin.y, 'skull');
         this.physics.add.existing(skull);
@@ -115,7 +108,6 @@ class BaseScene extends Phaser.Scene {
             yoyo: true,
             ease: 'Sine.easeInOut'
         })
-
     }
 
     createCollision() {
@@ -130,14 +122,19 @@ class BaseScene extends Phaser.Scene {
         //Enable overlap detection for player and gems/skulls
         this.physics.add.overlap(this.player, this.gems, function(){console.log("winner")});
         this.physics.add.overlap(this.player, this.skulls, function(){console.log("dead")});
-
     }
 
     retrieveCustomProperties(object) {
         if(object.properties) { //Check if the object has custom properties
-            object.properties.forEach(function(element){ //Loop through each property
-                this[element.name] = element.value; //Create the property in the object
-            }, object); //Assign the word "this" to be the object
+            if(Array.isArray(object.properties)) { //Check if from Tiled v1.3 and above
+                object.properties.forEach(function(element){ //Loop through each property
+                    this[element.name] = element.value; //Create the property in the object
+                }, object); //Assign the word "this" to refer to the object
+            } else {  //Check if from Tiled v1.2.5 and below
+                for(var propName in object.properties) { //Loop through each property
+                    object[propName] = object.properties[propName]; //Create the property in the object
+                }
+            }
 
             delete object.properties; //Delete the custom properties array from the object
         }
@@ -201,6 +198,7 @@ class SceneB extends BaseScene {
         this.load.image('landscape-image', '../assets/landscape-tileset.png');
         this.load.image('props-image', '../assets/props-tileset.png');
         this.load.image('gem', '../assets/gem.png');
+        this.load.image('skull', '../assets/skull.png');
         this.load.spritesheet('player', '../assets/player.png', {
             frameWidth: 24,
             frameHeight: 24
@@ -213,6 +211,7 @@ class SceneB extends BaseScene {
         this.map = this.make.tilemap({
             key: 'level2'
         });
+        this.createPlayer({x: 1, y: 1});
         super.create();
     }
 }
